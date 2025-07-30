@@ -1,0 +1,26 @@
+[project]
+name = "visionllm-mcp"
+version = "0.1.0"
+description = "A Model Context Protocol server that provides visual analysis capabilities using DashScope QwenVL"
+authors = [
+    { name = "VisionLLM Team" }
+]
+dependencies = [
+    "fastmcp>=2.3.0",
+    "dashscope>=1.14.0",
+    "python-dotenv>=1.0.0",
+]
+requires-python = ">=3.8"
+readme = "README.md"
+license = { text = "MIT" }
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+]
