@@ -1,4 +1,3 @@
-import asyncio
 import base64
 from fastmcp import FastMCP
 import os
@@ -78,18 +77,6 @@ def is_url(path: str) -> bool:
                 "type": "string",
                 "description": "关于图像的查询问题",
                 "default": "请描述这张图片的内容"
-            },
-            "model": {
-                "type": "string",
-                "enum": ["openai", "dashscope"],
-                "description": "使用的模型提供商",
-                "default": "dashscope"
-            },
-            "detail": {
-                "type": "string",
-                "enum": ["low", "high"],
-                "description": "图像分析的详细程度（仅适用于OpenAI）",
-                "default": "low"
             }
         },
         "required": ["image_path"]
@@ -100,13 +87,11 @@ def analyze_image(
     query: str = "请描述这张图片的内容"
 ) -> Dict[str, Any]:
     """
-    使用视觉模型分析图像
+    使用DashScope的QwenVL模型分析图像
     
     Args:
         image_path: 图像文件的路径或URL
         query: 关于图像的查询问题
-        model: 使用的模型提供商 ("openai" 或 "dashscope")
-        detail: 图像分析的详细程度 ("low" 或 "high")，仅适用于OpenAI
         
     Returns:
         包含分析结果的字典
@@ -167,126 +152,6 @@ def analyze_image(
             "error": error_msg
         }
 
-def analyze_image_with_openai(image_path: str, query: str, detail: str) -> Dict[str, Any]:
-    """
-    使用OpenAI的GPT-4 Vision模型分析图像
-    
-    Args:
-        image_path: 图像文件的路径
-        query: 关于图像的查询问题
-        detail: 图像分析的详细程度 ("low" 或 "high")
-        
-    Returns:
-        包含分析结果的字典
-    """
-    if not openai_client:
-        return {
-            "success": False,
-            "error": "未配置OpenAI API密钥"
-        }
-        
-    # 编码图像
-    base64_image = encode_image(image_path)
-    if not base64_image:
-        return {
-            "success": False,
-            "error": f"无法读取或编码图像文件: {image_path}"
-        }
-    
-    # 调用OpenAI的视觉模型
-    response = openai_client.chat.completions.create(
-        model="gpt-4-vision-preview",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": query},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                            "detail": detail
-                        }
-                    }
-                ]
-            }
-        ],
-        max_tokens=1000
-    )
-    
-    result = response.choices[0].message.content
-    logger.info(f"OpenAI图像分析完成: {image_path}")
-    
-    return {
-        "success": True,
-        "result": result,
-        "image_path": image_path,
-        "model": "gpt-4-vision-preview"
-    }
-
-def analyze_image_with_dashscope(image_path: str, query: str) -> Dict[str, Any]:
-    """
-    使用DashScope的QwenVL模型分析图像
-    
-    Args:
-        image_path: 图像文件的路径或URL
-        query: 关于图像的查询问题
-        
-    Returns:
-        包含分析结果的字典
-    """
-    if not dashscope_api_key:
-        return {
-            "success": False,
-            "error": "未配置DashScope API密钥"
-        }
-        
-    # 准备图像输入
-    if is_url(image_path):
-        image_input = image_path
-    else:
-        # 对于本地文件，需要先编码为base64
-        base64_image = encode_image(image_path)
-        if not base64_image:
-            return {
-                "success": False,
-                "error": f"无法读取或编码图像文件: {image_path}"
-            }
-        image_input = f"data:image/jpeg;base64,{base64_image}"
-    
-    # 调用DashScope的QwenVL模型
-    messages = [
-        {
-            "role": "user",
-            "content": [
-                {"text": query},
-                {"image": image_input}
-            ]
-        }
-    ]
-    
-    response = MultiModalConversation.call(
-        model='qwen-vl-plus',
-        messages=messages
-    )
-    
-    if response.status_code == 200:
-        result = response.output.choices[0]['message']['content']
-        logger.info(f"DashScope图像分析完成: {image_path}")
-        
-        return {
-            "success": True,
-            "result": result,
-            "image_path": image_path,
-            "model": "qwen-vl-plus"
-        }
-    else:
-        return {
-            "success": False,
-            "error": f"DashScope API调用失败: {response.message}",
-            "status_code": response.status_code
-        }
-
 @mcp.tool(
     name="analyze_image_from_context",
     description="基于上下文中的图像进行分析",
@@ -311,18 +176,6 @@ def analyze_image_with_dashscope(image_path: str, query: str) -> Dict[str, Any]:
             "query": {
                 "type": "string",
                 "description": "关于图像的查询问题"
-            },
-            "model": {
-                "type": "string",
-                "enum": ["openai", "dashscope"],
-                "description": "使用的模型提供商",
-                "default": "dashscope"
-            },
-            "detail": {
-                "type": "string",
-                "enum": ["low", "high"],
-                "description": "图像分析的详细程度（仅适用于OpenAI）",
-                "default": "low"
             }
         },
         "required": ["context", "image_path", "query"]
@@ -334,14 +187,12 @@ def analyze_image_from_context(
     query: str
 ) -> Dict[str, Any]:
     """
-    结合上下文信息分析图像内容
+    结合上下文信息分析图像内容（使用 DashScope 的 QwenVL 模型）
     
     Args:
         context: 对话上下文
         image_path: 图像文件的路径或URL
         query: 关于图像的查询问题
-        model: 使用的模型提供商 ("openai" 或 "dashscope")
-        detail: 图像分析的详细程度 ("low" 或 "high")，仅适用于OpenAI
         
     Returns:
         包含分析结果的字典
@@ -407,162 +258,6 @@ def analyze_image_from_context(
         return {
             "success": False,
             "error": error_msg
-        }
-
-def analyze_image_from_context_with_openai(
-    context: List[Dict[str, Any]], 
-    image_path: str, 
-    query: str, 
-    detail: str
-) -> Dict[str, Any]:
-    """
-    使用OpenAI结合上下文信息分析图像内容
-    
-    Args:
-        context: 对话上下文
-        image_path: 图像文件的路径
-        query: 关于图像的查询问题
-        detail: 图像分析的详细程度 ("low" 或 "high")
-        
-    Returns:
-        包含分析结果的字典
-    """
-    if not openai_client:
-        return {
-            "success": False,
-            "error": "未配置OpenAI API密钥"
-        }
-        
-    # 编码图像
-    base64_image = encode_image(image_path)
-    if not base64_image:
-        return {
-            "success": False,
-            "error": f"无法读取或编码图像文件: {image_path}"
-        }
-    
-    # 构建上下文字符串
-    context_messages = []
-    for msg in context:
-        context_messages.append({
-            "role": msg.get("role", "user"),
-            "content": msg.get("content", "")
-        })
-    
-    # 添加系统消息
-    messages = [{
-        "role": "system",
-        "content": "你是一个视觉分析助手，能够分析图像并结合上下文提供详细的信息。请用中文回答。"
-    }]
-    
-    # 添加上下文消息
-    messages.extend(context_messages)
-    
-    # 添加当前查询和图像
-    messages.append({
-        "role": "user",
-        "content": [
-            {"type": "text", "text": query},
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": f"data:image/jpeg;base64,{base64_image}",
-                    "detail": detail
-                }
-            }
-        ]
-    })
-    
-    # 调用OpenAI的视觉模型，结合上下文
-    response = openai_client.chat.completions.create(
-        model="gpt-4-vision-preview",
-        messages=messages,
-        max_tokens=1000
-    )
-    
-    result = response.choices[0].message.content
-    logger.info(f"结合上下文的OpenAI图像分析完成: {image_path}")
-    
-    return {
-        "success": True,
-        "result": result,
-        "image_path": image_path,
-        "model": "gpt-4-vision-preview"
-    }
-
-def analyze_image_from_context_with_dashscope(
-    context: List[Dict[str, Any]], 
-    image_path: str, 
-    query: str
-) -> Dict[str, Any]:
-    """
-    使用DashScope结合上下文信息分析图像内容
-    
-    Args:
-        context: 对话上下文
-        image_path: 图像文件的路径或URL
-        query: 关于图像的查询问题
-        
-    Returns:
-        包含分析结果的字典
-    """
-    if not dashscope_api_key:
-        return {
-            "success": False,
-            "error": "未配置DashScope API密钥"
-        }
-        
-    # 准备图像输入
-    if is_url(image_path):
-        image_input = image_path
-    else:
-        # 对于本地文件，需要先编码为base64
-        base64_image = encode_image(image_path)
-        if not base64_image:
-            return {
-                "success": False,
-                "error": f"无法读取或编码图像文件: {image_path}"
-            }
-        image_input = f"data:image/jpeg;base64,{base64_image}"
-    
-    # 构建上下文消息
-    context_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in context])
-    
-    # 调用DashScope的QwenVL模型
-    messages = [
-        {
-            "role": "system",
-            "content": "你是一个视觉分析助手，能够分析图像并结合上下文提供详细的信息。请用中文回答。"
-        },
-        {
-            "role": "user",
-            "content": [
-                {"text": f"基于以下对话上下文分析图像：\n{context_text}\n\n请回答：{query}"},
-                {"image": image_input}
-            ]
-        }
-    ]
-    
-    response = MultiModalConversation.call(
-        model='qwen-vl-plus',
-        messages=messages
-    )
-    
-    if response.status_code == 200:
-        result = response.output.choices[0]['message']['content']
-        logger.info(f"结合上下文的DashScope图像分析完成: {image_path}")
-        
-        return {
-            "success": True,
-            "result": result,
-            "image_path": image_path,
-            "model": "qwen-vl-plus"
-        }
-    else:
-        return {
-            "success": False,
-            "error": f"DashScope API调用失败: {response.message}",
-            "status_code": response.status_code
         }
 
 @mcp.tool(
